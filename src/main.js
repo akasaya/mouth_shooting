@@ -6,7 +6,7 @@ import { createPlayer, updatePlayer, updateShooting } from './player.js';
 import { createBomb, updateBomb, chargeToRadius } from './bomb.js';
 import { updateBullets, drawBullets } from './bullet.js';
 import { updateEnemies, drawEnemies } from './enemy.js';
-import { createStageState, startStage, updateStage } from './stage.js';
+import { createDirector, startDirector, updateDirector } from './stage.js';
 import { updateParticles, drawParticles } from './particles.js';
 import { applyComboDecay, musicLayerLevel } from './combo.js';
 import { neonTriangle, neonRing } from './draw.js';
@@ -21,7 +21,7 @@ const game = {
   width: window.innerWidth,
   height: window.innerHeight,
   time: 0,                 // ms（performance.now ベース）
-  state: 'title',          // 'title' | 'playing' | 'gameover' | 'allclear'
+  state: 'title',          // 'title' | 'playing' | 'gameover'
   score: 0,
   highScore: loadHighScore(),
   bullets: [],
@@ -35,9 +35,8 @@ const game = {
   audio: null,
   player: null,
   bomb: createBomb(),
-  stage: createStageState(),
+  director: createDirector(),
   onGameOver: () => endGame('gameover'),
-  onAllClear: () => endGame('allclear'),
 };
 
 game.input = createInput(canvas);
@@ -78,8 +77,8 @@ function startGame() {
   game.banner = null;
   game.player = createPlayer(game.input.x, game.input.y);
   game.bomb = createBomb();
-  game.stage = createStageState();
-  startStage(game, 1);
+  game.director = createDirector();
+  startDirector(game);
   game.state = 'playing';
   game.audio.resume();
   game.audio.startMusic();
@@ -110,7 +109,7 @@ function update(dtSec) {
   updateBomb(game, dtSec);
   updateEnemies(game, dtSec);
   updateBullets(game, dtSec);
-  updateStage(game);
+  updateDirector(game, dtSec);
   updateParticles(game.particles, dtSec);
 
   // コンボ減衰と音楽レイヤー。

@@ -27,6 +27,7 @@ export function createBomb() {
     radius: 0,        // 現在の波の半径
     targetRadius: 0,  // 拡大の到達点
     hit: new Set(),   // 既にヒットした敵 id（多重ヒット防止）
+    kills: 0,         // この1回のボムで倒した数（撃破が進むほど1体の得点が累積する）
   };
 }
 
@@ -51,6 +52,7 @@ export function updateBomb(game, dtSec) {
     b.radius = 0;
     b.targetRadius = chargeToRadius(b.charge, cfg.minRadius, cfg.maxRadius);
     b.hit.clear();
+    b.kills = 0;
     game.audio.sfxBomb(b.charge);
     spawnBurst(game.particles, game.player.x, game.player.y, 28, '#39f6ff');
   }
@@ -58,28 +60,47 @@ export function updateBomb(game, dtSec) {
   // --- 衝撃波の拡大とヒット判定 ---
   if (b.active) {
     b.radius += cfg.expandSpeed * dtSec;
+    const px = game.player.x;
+    const py = game.player.y;
     const mult = comboScoreMultiplier(game.combo.count, cc.scorePer);
-    let killed = 0;
+    let killedThisFrame = 0;
+
+    // 敵を一掃。1回のボム内で撃破が進むほど、1体の得点が累積的に上がる。
     for (const e of game.enemies) {
       if (!e.alive || b.hit.has(e.id)) continue;
-      if (wavefrontReached(game.player.x, game.player.y, b.radius, e.x, e.y, e.r)) {
+      if (wavefrontReached(px, py, b.radius, e.x, e.y, e.r)) {
         b.hit.add(e.id);
-        e.hp -= 999; // 衝撃波は貫通して一掃
+        e.hp -= 999; // 衝撃波は貫通
         if (e.hp <= 0) {
           e.alive = false;
-          killed++;
+          b.kills += 1;
+          killedThisFrame += 1;
+          // 撃破順 (b.kills) に比例して得点が増える: 1体目×1, 2体目×2, ...
+          game.score += cfg.killScore * mult * b.kills;
           spawnBurst(game.particles, e.x, e.y, 14, e.color);
           game.audio.sfxExplosion();
         }
       }
     }
-    if (killed > 0) {
-      game.score += killed * cfg.killScore * mult;
-      registerKills(game, killed); // ボム同時撃破でコンボ大増加
+    if (killedThisFrame > 0) {
+      registerKills(game, killedThisFrame); // ボム同時撃破でコンボ大増加
     }
+
+    // 敵弾も衝撃波で消す（防御）。
+    for (const eb of game.enemyBullets) {
+      if (!eb.alive) continue;
+      if (wavefrontReached(px, py, b.radius, eb.x, eb.y, eb.r)) {
+        eb.alive = false;
+        spawnBurst(game.particles, eb.x, eb.y, 4, '#ff5a8a');
+      }
+    }
+
     if (b.radius >= b.targetRadius) {
       b.active = false;
       b.charge = 0;
+      if (b.kills >= cfg.bigSweep) {
+        game.banner = { text: `BOMB x${b.kills}!`, until: game.time + 1300 };
+      }
     }
   }
 }

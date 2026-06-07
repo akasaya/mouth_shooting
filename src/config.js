@@ -21,8 +21,9 @@ export const CONFIG = {
     maxRadius: 340,
     expandSpeed: 1100,         // 衝撃波の広がる速さ（px/秒）
     ringWidth: 30,
-    killScore: 22,             // ボム撃破1体ごとの基礎スコア（×コンボ倍率）
+    killScore: 14,             // ボム撃破の基礎スコア。1回のボム内で撃破が進むほど累積的に倍増する
     moveSlow: 0.4,
+    bigSweep: 5,               // この撃破数以上で「BOMB xN!」を表示
   },
   combo: {
     decayMs: 2200,                       // この時間撃破が無いとコンボはリセット
@@ -32,12 +33,14 @@ export const CONFIG = {
   },
   enemy: {
     baseRadius: 14,
-    baseSpeed: 72,           // ステージ1の突進速度（px/秒）。ステージで上昇。
+    baseSpeed: 72,           // 開始時の突進速度（px/秒）。時間経過で上昇。
     contactDamage: 1,
     bulletSpeed: 190,
     bulletRadius: 5,
   },
-  stage: {
-    count: 5,
+  // エンドレス進行のディレクター。時間経過で敵と弾が連続的に増える。
+  director: {
+    bossIntervalSec: 40,     // この秒数ごとにボスが出現（山場・難化イベント）
+    levelEverySec: 20,       // 表示用 LEVEL が上がる間隔
   },
 };

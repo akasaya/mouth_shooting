@@ -4,6 +4,13 @@ import { comboScoreMultiplier } from './combo.js';
 
 const FONT = "700 16px 'Segoe UI', system-ui, sans-serif";
 
+function formatTime(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
 export function drawHud(ctx, game) {
   const w = game.width;
   ctx.save();
@@ -21,11 +28,11 @@ export function drawHud(ctx, game) {
   ctx.fillStyle = '#6fb8c8';
   ctx.fillText(`HI ${Math.floor(game.highScore)}`, 16, 42);
 
-  // ステージ
+  // 経過時間とレベル（エンドレス）
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffd166';
   ctx.font = "700 18px 'Segoe UI', system-ui, sans-serif";
-  ctx.fillText(`STAGE ${game.stage.index} / ${CONFIG.stage.count}`, w / 2, 16);
+  ctx.fillText(`TIME ${formatTime(game.director.elapsed)}   Lv.${game.director.level}`, w / 2, 16);
 
   // コンボ（中央やや上、コンボ中は大きく光る）
   if (game.combo.count > 0) {
@@ -98,9 +105,6 @@ export function drawOverlay(ctx, game) {
   } else if (game.state === 'gameover') {
     big(ctx, w, h * 0.4, 'GAME OVER', '#ff4060');
     info(ctx, w, h, game, 'クリックでリスタート');
-  } else if (game.state === 'allclear') {
-    big(ctx, w, h * 0.4, 'ALL CLEAR!', '#5cffb1');
-    info(ctx, w, h, game, 'クリックでもう一度');
   }
   ctx.restore();
 }

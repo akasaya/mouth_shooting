@@ -1,78 +1,63 @@
-// ステージ進行と難易度カーブ。ウェーブ→ボス→クリアの状態遷移を管理する。
+// エンドレス進行のディレクター。経過時間に応じて敵と弾を連続的に増やす。
+// difficultyAt は純粋関数（テスト対象）。spawner は game に作用する統合部分。
 import { CONFIG } from './config.js';
 import { spawnEnemy, spawnBoss } from './enemy.js';
 
-// ステージ番号 → 難易度パラメータ（純粋・進行で単調に難化）。
-export function stageParams(index) {
+// 経過秒 → 難易度パラメータ（純粋・時間で単調に難化）。
+export function difficultyAt(elapsedSec) {
+  const t = Math.max(0, elapsedSec);
   return {
-    spawnIntervalMs: Math.max(280, 1100 - index * 130), // 出現間隔（短いほど密）
-    quota: 8 + index * 5,                                // ボス前に倒す敵数
-    speed: CONFIG.enemy.baseSpeed * (1 + (index - 1) * 0.18),
-    shooterChance: Math.min(0.7, 0.08 + index * 0.12),   // 射撃する敵の割合
-    enemyHp: 1 + Math.floor((index - 1) / 2),            // 2ステージごとに硬く
-    bossHp: 40 + index * 30,
-    bossSpeed: 40 + index * 6,
+    spawnIntervalMs: Math.max(180, 1000 - t * 7), // 出現間隔は時間で短縮（下限180ms＝敵が増える）
+    speed: CONFIG.enemy.baseSpeed * (1 + t * 0.012), // 突進速度の上昇
+    shooterChance: Math.min(0.85, 0.1 + t * 0.006),  // 射撃する敵の割合（弾が増える）
+    enemyHp: 1 + Math.floor(t / 45),                 // 45秒ごとに硬く
+    shots: 1 + Math.floor(t / 40),                   // 1体が撃つ弾数（時間で増える）
+    spread: 0.26,
   };
 }
 
-export function createStageState() {
+export function createDirector() {
   return {
-    index: 1,
-    phase: 'wave',   // 'wave' | 'boss' | 'clear'
-    spawned: 0,
+    elapsed: 0,    // 経過秒
+    level: 1,      // 表示用レベル
     nextSpawnAt: 0,
-    params: stageParams(1),
+    nextBossAt: 0,
   };
 }
 
-export function startStage(game, index) {
-  const s = game.stage;
-  s.index = index;
-  s.phase = 'wave';
-  s.spawned = 0;
-  s.params = stageParams(index);
-  s.nextSpawnAt = game.time + 600;
+export function startDirector(game) {
+  const d = game.director;
+  d.elapsed = 0;
+  d.level = 1;
+  d.nextSpawnAt = game.time + 500;
+  d.nextBossAt = game.time + CONFIG.director.bossIntervalSec * 1000;
 }
 
-export function updateStage(game) {
-  const s = game.stage;
-  const p = s.params;
+export function updateDirector(game, dtSec) {
+  const d = game.director;
+  d.elapsed += dtSec;
+  d.level = Math.floor(d.elapsed / CONFIG.director.levelEverySec) + 1;
 
-  if (s.phase === 'wave') {
-    // クォータまで一定間隔で敵を出す。
-    if (s.spawned < p.quota && game.time >= s.nextSpawnAt) {
-      const shooter = Math.random() < p.shooterChance;
-      spawnEnemy(game, { speed: p.speed, hp: p.enemyHp, shooter, fireChance: p.shooterChance });
-      s.spawned += 1;
-      s.nextSpawnAt = game.time + p.spawnIntervalMs;
-    }
-    // 全部出し切り、画面の敵を一掃したらボスへ。
-    if (s.spawned >= p.quota && game.enemies.length === 0) {
-      s.phase = 'boss';
-      spawnBoss(game, { hp: p.bossHp, speed: p.bossSpeed });
-      game.banner = { text: `STAGE ${s.index}  BOSS`, until: game.time + 1800 };
-    }
-    return;
+  const diff = difficultyAt(d.elapsed);
+
+  // 通常敵を連続スポーン。
+  if (game.time >= d.nextSpawnAt) {
+    const shooter = Math.random() < diff.shooterChance;
+    spawnEnemy(game, {
+      speed: diff.speed,
+      hp: diff.enemyHp,
+      shooter,
+      shots: diff.shots,
+      spread: diff.spread,
+    });
+    d.nextSpawnAt = game.time + diff.spawnIntervalMs;
   }
 
-  if (s.phase === 'boss') {
-    // ボス撃破（敵が居なくなった）でステージクリア。
-    if (game.enemies.length === 0) {
-      s.phase = 'clear';
-      if (s.index >= CONFIG.stage.count) {
-        game.onAllClear();
-      } else {
-        game.banner = { text: `STAGE ${s.index} CLEAR`, until: game.time + 2200 };
-        game.clearAt = game.time + 2200;
-      }
-    }
-    return;
-  }
-
-  if (s.phase === 'clear') {
-    // バナー表示後、次ステージへ。
-    if (game.time >= game.clearAt) {
-      startStage(game, s.index + 1);
-    }
+  // 一定間隔でボス出現（進行をゲートせず、通常スポーンと並走する難化イベント）。
+  if (game.time >= d.nextBossAt) {
+    const bossHp = 60 + Math.floor(d.elapsed / CONFIG.director.bossIntervalSec) * 40;
+    spawnBoss(game, { hp: bossHp, speed: 46 });
+    game.banner = { text: 'WARNING — BOSS', until: game.time + 1800 };
+    d.nextBossAt = game.time + CONFIG.director.bossIntervalSec * 1000;
   }
 }

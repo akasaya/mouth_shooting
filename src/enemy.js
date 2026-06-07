@@ -18,7 +18,7 @@ function edgeSpawn(w, h) {
   return { x: w + m, y: Math.random() * h };
 }
 
-export function spawnEnemy(game, { speed, hp = 1, shooter = false, fireChance = 0 }) {
+export function spawnEnemy(game, { speed, hp = 1, shooter = false, shots = 1, spread = 0.26 }) {
   const pos = edgeSpawn(game.width, game.height);
   game.enemies.push({
     id: nextId++,
@@ -30,7 +30,8 @@ export function spawnEnemy(game, { speed, hp = 1, shooter = false, fireChance = 
     color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
     rot: Math.random() * Math.PI,
     shooter,
-    fireChance,
+    shots,                 // 1回に撃つ弾数（時間経過で増える）
+    spread,                // 複数弾のときの扇の広がり（ラジアン）
     fireCooldownMs: 700 + Math.random() * 900,
     nextFireAt: game.time + 800 + Math.random() * 1200,
     isBoss: false,
@@ -50,7 +51,8 @@ export function spawnBoss(game, { hp, speed }) {
     color: '#ff3860',
     rot: 0,
     shooter: true,
-    fireChance: 1,
+    shots: 5,
+    spread: 0.5,
     fireCooldownMs: 1300,
     nextFireAt: game.time + 1200,
     isBoss: true,
@@ -102,8 +104,8 @@ function fireAtPlayer(game, e) {
   const p = game.player;
   const baseAng = Math.atan2(p.y - e.y, p.x - e.x);
   const sp = CONFIG.enemy.bulletSpeed;
-  const shots = e.isBoss ? 5 : 1;
-  const spread = e.isBoss ? 0.5 : 0;
+  const shots = e.shots || 1;
+  const spread = e.spread || 0;
   for (let i = 0; i < shots; i++) {
     const a = baseAng + (i - (shots - 1) / 2) * spread;
     game.enemyBullets.push({
