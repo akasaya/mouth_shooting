@@ -1,0 +1,26 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #04060e;
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  /* ネオン背景: 中央が少し明るい放射グラデーション */
+  background:
+    radial-gradient(circle at 50% 45%, #0a1226 0%, #050813 55%, #02030a 100%);
+  cursor: crosshair;
+  /* マウス操作ゲーム。テキスト選択・タッチ操作の既定挙動を抑止 */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}

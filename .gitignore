@@ -1,0 +1,18 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*~
+.idea/
+.vscode/
+
+# Logs / temp
+*.log
+/tmp/
+
+# Playwright / 動作確認の生成物
+.playwright-mcp/
+title.png
+*.screenshot.png
+
+# Node（依存は使わない方針だが、誤って入れた場合の保険）
+node_modules/
