@@ -19,10 +19,21 @@ export function chargeToRadius(charge, minRadius, maxRadius) {
   return minRadius + (maxRadius - minRadius) * clamp01(charge);
 }
 
+// エネルギー回復（純粋・max でクランプ）。
+export function gainEnergy(energy, amount, max = 1) {
+  return Math.min(max, clamp01(energy) + Math.max(0, amount));
+}
+
+// エネルギー消費（純粋・0 下限）。
+export function drainEnergy(energy, amount) {
+  return Math.max(0, clamp01(energy) - Math.max(0, amount));
+}
+
 export function createBomb() {
   return {
     charging: false,
     charge: 0,        // 0..1
+    energy: CONFIG.bomb.energyStart, // 0..1。ショット撃破で回復、チャージで消費
     active: false,    // 衝撃波が拡大中か
     radius: 0,        // 現在の波の半径
     targetRadius: 0,  // 拡大の到達点
@@ -38,23 +49,34 @@ export function updateBomb(game, dtSec) {
   const cc = CONFIG.combo;
   const holding = game.input.right;
 
-  // --- チャージ中 ---
+  // --- チャージ中（エネルギーを消費し、燃料が尽きたら頭打ち）---
   if (holding && !b.active) {
     b.charging = true;
     const rate = bombChargeRate(game.combo.count, cfg.chargeRateBase, cfg.chargePerComboStep, cc.chargePer);
-    b.charge = nextCharge(b.charge, rate, dtSec, cfg.maxCharge);
+    const desired = nextCharge(b.charge, rate, dtSec, cfg.maxCharge);
+    let delta = desired - b.charge;
+    if (delta > 0 && cfg.energyPerCharge > 0) {
+      const affordable = b.energy / cfg.energyPerCharge; // 残エネルギーで伸ばせるチャージ量
+      if (delta > affordable) delta = affordable;        // 燃料切れで頭打ち
+      b.charge += delta;
+      b.energy = drainEnergy(b.energy, delta * cfg.energyPerCharge);
+    }
   }
 
-  // --- 離した瞬間に発動 ---
+  // --- 離した瞬間に発動（最小チャージ未満は不発＝連打抑止）---
   if (!holding && b.charging && !b.active) {
     b.charging = false;
-    b.active = true;
-    b.radius = 0;
-    b.targetRadius = chargeToRadius(b.charge, cfg.minRadius, cfg.maxRadius);
-    b.hit.clear();
-    b.kills = 0;
-    game.audio.sfxBomb(b.charge);
-    spawnBurst(game.particles, game.player.x, game.player.y, 28, '#39f6ff');
+    if (b.charge >= cfg.minChargeToFire) {
+      b.active = true;
+      b.radius = 0;
+      b.targetRadius = chargeToRadius(b.charge, cfg.minRadius, cfg.maxRadius);
+      b.hit.clear();
+      b.kills = 0;
+      game.audio.sfxBomb(b.charge);
+      spawnBurst(game.particles, game.player.x, game.player.y, 28, '#39f6ff');
+    } else {
+      b.charge = 0; // 不発。消費した僅かなエネルギーは戻らない（タップ連打は損）
+    }
   }
 
   // --- 衝撃波の拡大とヒット判定 ---

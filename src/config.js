@@ -24,6 +24,13 @@ export const CONFIG = {
     killScore: 14,             // ボム撃破の基礎スコア。1回のボム内で撃破が進むほど累積的に倍増する
     moveSlow: 0.4,
     bigSweep: 5,               // この撃破数以上で「BOMB xN!」を表示
+    // --- エネルギー制（右連打の無敵を防ぎ、ショットを燃料にする）---
+    energyMax: 1,
+    energyStart: 0.45,         // ゲーム開始時のエネルギー
+    energyPerKill: 0.07,       // ショット撃破1体あたりの回復量
+    energyComboBonus: 0.004,   // コンボ数に比例した回復ボーナス（×combo、上限あり）
+    energyPerCharge: 0.9,      // charge 1.0 ぶんを溜めるのに必要なエネルギー（半径∝消費）
+    minChargeToFire: 0.06,     // これ未満のチャージは不発（タップ連打の抑止）
   },
   combo: {
     decayMs: 2200,                       // この時間撃破が無いとコンボはリセット

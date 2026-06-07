@@ -2,6 +2,7 @@
 import { CONFIG } from './config.js';
 import { circlesOverlap, isOutside } from './collision.js';
 import { comboScoreMultiplier } from './combo.js';
+import { gainEnergy } from './bomb.js';
 import { spawnBurst } from './particles.js';
 import { fillDot as dot } from './draw.js';
 import { hitPlayer } from './enemy.js';
@@ -55,10 +56,14 @@ export function updateBullets(game, dtSec) {
 }
 
 function onShotKill(game, e) {
+  const cfg = CONFIG.bomb;
   const mult = comboScoreMultiplier(game.combo.count, CONFIG.combo.scorePer);
   game.score += CONFIG.shot.score * mult;
   game.combo.count += 1;
   game.combo.lastKillTime = game.time;
+  // ショット撃破がボムの燃料になる（コンボが高いほど回復ボーナス）。
+  const refill = cfg.energyPerKill + Math.min(cfg.energyPerKill, cfg.energyComboBonus * game.combo.count);
+  game.bomb.energy = gainEnergy(game.bomb.energy, refill, cfg.energyMax);
   spawnBurst(game.particles, e.x, e.y, 10, e.color);
   game.audio.sfxExplosion();
 }
@@ -71,5 +76,5 @@ function cull(arr) {
 
 export function drawBullets(ctx, game) {
   for (const b of game.bullets) dot(ctx, b.x, b.y, b.r, '#aef9ff', 10);
-  for (const b of game.enemyBullets) dot(ctx, b.x, b.y, b.r, '#ff5a8a', 10);
+  for (const b of game.enemyBullets) dot(ctx, b.x, b.y, b.r, b.color || '#ff5a8a', 10);
 }
