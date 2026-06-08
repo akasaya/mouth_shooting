@@ -70,6 +70,9 @@ export function drawHud(ctx, game) {
   // ボムエネルギーゲージ（画面下中央。ショットで溜まり、ボムで減る）
   drawEnergyGauge(ctx, game);
 
+  // 取得中のバフ（画面左下）
+  drawBuffs(ctx, game);
+
   // チャージゲージ（自機の下。溜め中のみ）
   if (game.bomb.charging && game.bomb.charge > 0) {
     drawChargeGauge(ctx, game);
@@ -133,6 +136,28 @@ function drawEnergyGauge(ctx, game) {
       ctx.fill();
     }
     ctx.shadowBlur = 0;
+  }
+  ctx.restore();
+}
+
+function drawBuffs(ctx, game) {
+  const p = game.player;
+  const items = [];
+  if (p.wayLevel > 0) items.push({ t: `WAY x${1 + 2 * p.wayLevel}`, c: '#39f6ff' });
+  if (p.options > 0) items.push({ t: `OPTION x${p.options}`, c: '#ffd166' });
+  if (p.shield) items.push({ t: 'SHIELD', c: '#5cffb1' });
+  if (items.length === 0) return;
+  ctx.save();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.font = "700 14px 'Segoe UI', system-ui, sans-serif";
+  let y = game.height - 18;
+  for (const it of items) {
+    ctx.fillStyle = it.c;
+    ctx.shadowColor = it.c;
+    ctx.shadowBlur = 8;
+    ctx.fillText(it.t, 16, y);
+    y -= 20;
   }
   ctx.restore();
 }

@@ -4,6 +4,7 @@
 import { CONFIG } from './config.js';
 import { wavefrontReached } from './collision.js';
 import { bombChargeRate, comboScoreMultiplier } from './combo.js';
+import { maybeDropItem } from './item.js';
 import { spawnBurst } from './particles.js';
 
 const clamp01 = (n) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
@@ -45,6 +46,13 @@ export function addEnergyToStock(energy, stock, amount, max = 1, maxStock = Infi
     }
   }
   return { energy: e, stock: Math.min(s, maxStock) };
+}
+
+// ボム撃破1体あたりのゲージ回復（純粋）。撃破順 killIndex に比例＝同時撃破が多いほど稼げる。
+export function bombKillEnergy(killIndex, per) {
+  const k = Number.isFinite(killIndex) ? Math.floor(killIndex) : 0;
+  if (k <= 0) return 0;
+  return Math.max(0, per) * k;
 }
 
 export function createBomb() {
@@ -98,7 +106,7 @@ export function updateBomb(game, dtSec) {
     b.radius += cfg.expandSpeed * dtSec;
     const px = game.player.x;
     const py = game.player.y;
-    const mult = comboScoreMultiplier(game.combo.count, cc.scorePer);
+    const mult = comboScoreMultiplier(game.combo.count, cc.scorePer, cc.scoreAccel, cc.scoreMultMax);
     let killedThisFrame = 0;
 
     // 敵を一掃。1回のボム内で撃破が進むほど、1体の得点が累積的に上がる。
@@ -113,6 +121,11 @@ export function updateBomb(game, dtSec) {
           killedThisFrame += 1;
           // 撃破順 (b.kills) に比例して得点が増える: 1体目×1, 2体目×2, ...
           game.score += cfg.killScore * mult * b.kills;
+          // ボム撃破でもゲージが溜まる（撃破順に比例＝同時撃破が多いほど稼げる。上限なし）。
+          const r = addEnergyToStock(game.bomb.energy, game.bomb.stock, bombKillEnergy(b.kills, cfg.energyPerBombKill), cfg.energyMax, cfg.maxStock);
+          game.bomb.energy = r.energy;
+          game.bomb.stock = r.stock;
+          maybeDropItem(game, e);
           spawnBurst(game.particles, e.x, e.y, 14, e.color);
           game.audio.sfxExplosion();
         }

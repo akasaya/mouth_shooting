@@ -222,13 +222,26 @@ function shoot(game, e, ang, speed, sizeMul) {
   });
 }
 
-// 自機被弾。無敵中は無視。ライフ減・コンボ消失・GAME OVER 判定。
+// 自機被弾。無敵中は無視。
+// シールド所持時は被弾を1回肩代わり（ライフ・コンボ・他バフを守り、シールドだけ消費）。
+// シールド無しなら ライフ減・コンボ消失・Way/オプション全消失・GAME OVER 判定。
 export function hitPlayer(game) {
   const p = game.player;
   if (game.time < p.invulnUntil) return;
+
+  if (p.shield) {
+    p.shield = false;
+    p.invulnUntil = game.time + CONFIG.player.shieldInvulnMs;
+    spawnBurst(game.particles, p.x, p.y, 22, '#5cffb1');
+    game.audio.sfxShield();
+    return;
+  }
+
   p.lives -= 1;
   p.invulnUntil = game.time + CONFIG.player.invulnMs;
   game.combo.count = 0; // 被弾でコンボ消失（リスク）
+  p.wayLevel = 0;       // 被弾でバフ消失
+  p.options = 0;
   spawnBurst(game.particles, p.x, p.y, 24, '#ff4060');
   game.audio.sfxHit();
   if (p.lives <= 0) {

@@ -22,3 +22,14 @@ export function wavefrontReached(cx, cy, currentRadius, px, py, pr) {
 export function isOutside(px, py, w, h, margin = 40) {
   return px < -margin || py < -margin || px > w + margin || py > h + margin;
 }
+
+// 「かすり」判定: 当たり半径の外側 margin までの帯に入っているか（重なりは含まない）。
+// dist が (ar+br) より大きく、(ar+br+margin) 以下のときだけ true。
+export function withinGraze(ax, ay, ar, bx, by, br, margin) {
+  const dx = ax - bx;
+  const dy = ay - by;
+  const d2 = dx * dx + dy * dy;
+  const hit = ar + br;
+  const outer = hit + Math.max(0, margin);
+  return d2 > hit * hit && d2 <= outer * outer;
+}
