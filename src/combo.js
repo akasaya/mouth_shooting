@@ -24,6 +24,14 @@ export function musicLayerLevel(combo, thresholds) {
   return level;
 }
 
+// 生存秒数 → 音楽の追加レイヤー段階。perLayerSec ごとに +1、maxLevel で頭打ち。
+// コンボ由来のレイヤーとは独立に、長く生きるほど音数を増やすために使う。
+export function survivalLayerLevel(elapsedSec, perLayerSec, maxLevel) {
+  if (!(perLayerSec > 0)) return 0;
+  const t = clampNonNeg(elapsedSec);
+  return Math.min(maxLevel, Math.floor(t / perLayerSec));
+}
+
 // 最後の撃破からの経過時間に応じてコンボを減衰させる。
 // decayMs 以内なら維持、超えたらリセット（0）。
 export function applyComboDecay(combo, msSinceLastKill, decayMs) {

@@ -5,6 +5,7 @@ import {
   bombChargeRate,
   musicLayerLevel,
   applyComboDecay,
+  survivalLayerLevel,
 } from '../src/combo.js';
 
 test('comboScoreMultiplier_zero_returns_one', () => {
@@ -53,4 +54,21 @@ test('applyComboDecay_past_window_resets_to_zero', () => {
 
 test('applyComboDecay_zero_stays_zero', () => {
   assert.equal(applyComboDecay(0, 9999, 2200), 0);
+});
+
+test('survivalLayerLevel_increases_one_step_per_interval', () => {
+  // perLayerSec=45 ごとに +1、maxLevel=4 で頭打ち
+  assert.equal(survivalLayerLevel(0, 45, 4), 0);
+  assert.equal(survivalLayerLevel(44, 45, 4), 0);
+  assert.equal(survivalLayerLevel(45, 45, 4), 1);
+  assert.equal(survivalLayerLevel(135, 45, 4), 3);
+});
+
+test('survivalLayerLevel_clamps_to_maxLevel', () => {
+  assert.equal(survivalLayerLevel(99999, 45, 4), 4);
+});
+
+test('survivalLayerLevel_bad_input_returns_zero', () => {
+  assert.equal(survivalLayerLevel(NaN, 45, 4), 0);
+  assert.equal(survivalLayerLevel(100, 0, 4), 0); // perLayerSec 0 は無効
 });

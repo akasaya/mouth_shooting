@@ -45,9 +45,11 @@ export function drawHud(ctx, game) {
     ctx.shadowBlur = 0;
   }
 
-  // ライフ（右上にハート風の丸）
-  ctx.textAlign = 'right';
-  for (let i = 0; i < game.player.lives; i++) {
+  // ライフ（右上にハート風の丸）。エクステンドで増えるため、多いときは丸＋数値表示。
+  const lives = Math.max(0, game.player.lives | 0);
+  const maxDots = 5;
+  const dots = Math.min(lives, maxDots);
+  for (let i = 0; i < dots; i++) {
     ctx.fillStyle = '#ff4060';
     ctx.shadowColor = '#ff4060';
     ctx.shadowBlur = 10;
@@ -56,6 +58,14 @@ export function drawHud(ctx, game) {
     ctx.fill();
   }
   ctx.shadowBlur = 0;
+  if (lives > maxDots) {
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ff8095';
+    ctx.font = "700 15px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText(`x${lives}`, w - 20 - maxDots * 26, 26);
+    ctx.textBaseline = 'top';
+  }
 
   // ボムエネルギーゲージ（画面下中央。ショットで溜まり、ボムで減る）
   drawEnergyGauge(ctx, game);
@@ -80,27 +90,50 @@ export function drawHud(ctx, game) {
 }
 
 function drawEnergyGauge(ctx, game) {
-  const e = Math.max(0, Math.min(1, game.bomb.energy));
+  const e = Math.max(0, Math.min(1, game.bomb.energy)); // 次のストックまでの進捗
+  const stock = Math.max(0, game.bomb.stock | 0);
   const gw = 220, gh = 12;
   const x = (game.width - gw) / 2;
   const y = game.height - 34;
-  const low = e < 0.2;
-  const blink = low && Math.floor(game.time / 140) % 2 === 0;
+  const empty = stock <= 0;
+  const blink = empty && Math.floor(game.time / 140) % 2 === 0;
+  const color = empty ? '#ff6b6b' : '#ffb347';
   ctx.save();
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   ctx.font = "700 13px 'Segoe UI', system-ui, sans-serif";
-  ctx.fillStyle = low ? '#ff6b6b' : '#ffb347';
+  ctx.fillStyle = color;
   ctx.fillText('BOMB', x - 8, y + gh / 2);
-  // 枠
+  // 枠（次のストックまでのゲージ）
   ctx.fillStyle = 'rgba(255,179,71,0.18)';
   ctx.fillRect(x, y, gw, gh);
-  // 残量
-  const color = low ? '#ff6b6b' : '#ffb347';
-  ctx.fillStyle = blink ? 'rgba(255,107,107,0.4)' : color;
-  ctx.shadowColor = color;
+  // ゲージ残量
+  ctx.fillStyle = '#ffb347';
+  ctx.shadowColor = '#ffb347';
   ctx.shadowBlur = 10;
   ctx.fillRect(x, y, gw * e, gh);
+  ctx.shadowBlur = 0;
+
+  // ストック数（ゲージ右にボム弾アイコンを並べる。0 のときは点滅で警告）
+  const r = 6, gap = 18;
+  ctx.textAlign = 'left';
+  if (empty) {
+    if (!blink) {
+      ctx.fillStyle = '#ff6b6b';
+      ctx.font = "700 13px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('EMPTY', x + gw + 12, y + gh / 2);
+    }
+  } else {
+    for (let i = 0; i < stock; i++) {
+      ctx.beginPath();
+      ctx.fillStyle = '#aef9ff';
+      ctx.shadowColor = '#39f6ff';
+      ctx.shadowBlur = 10;
+      ctx.arc(x + gw + 14 + i * gap, y + gh / 2, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+  }
   ctx.restore();
 }
 
@@ -143,9 +176,10 @@ function title(ctx, w, h, game) {
   ctx.fillStyle = '#cfe9f0';
   const lines = [
     'マウスを動かして自機を操作',
-    '左クリック（長押しで連射）: ショット',
-    '右クリック（長押しで溜め→離す）: ボム',
-    'コンボを重ねるとボムが早く溜まり、音が増える',
+    '左クリック（長押しで連射）: ショット → ボムゲージが溜まる',
+    'ゲージ満タンでボムを1ストック（最大5）',
+    '右クリック（長押しで溜め→離す）: ストックを1消費してボム',
+    'コンボで早く溜まり、長く生きるほど音が増える',
   ];
   lines.forEach((t, i) => ctx.fillText(t, w / 2, h * 0.48 + i * 28));
   ctx.font = "700 20px 'Segoe UI', system-ui, sans-serif";

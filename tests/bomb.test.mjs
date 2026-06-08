@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextCharge, chargeToRadius, gainEnergy, drainEnergy } from '../src/bomb.js';
+import { nextCharge, chargeToRadius, gainEnergy, drainEnergy, addEnergyToStock } from '../src/bomb.js';
 
 test('nextCharge_accumulates_rate_times_dt', () => {
   // 0 から 速度1.0 × 0.5秒 = 0.5
@@ -39,4 +39,36 @@ test('drainEnergy_subtracts_and_floors_at_zero', () => {
   assert.equal(drainEnergy(0.5, 0.2), 0.3);
   assert.equal(drainEnergy(0.1, 0.9), 0);     // 0 下限
   assert.equal(drainEnergy(0.5, -1), 0.5);    // 負の消費は無効
+});
+
+test('addEnergyToStock_accumulates_without_reaching_full', () => {
+  const r = addEnergyToStock(0.4, 0, 0.2, 1, 5);
+  assert.ok(Math.abs(r.energy - 0.6) < 1e-9);
+  assert.equal(r.stock, 0);
+});
+
+test('addEnergyToStock_full_converts_to_stock_and_resets_gauge', () => {
+  // ゲージ満タンで +1 ストック、ゲージは 0 にリセット（端数は繰り越さない）
+  const r = addEnergyToStock(0.9, 1, 0.25, 1, 5);
+  assert.equal(r.stock, 2);
+  assert.equal(r.energy, 0);
+});
+
+test('addEnergyToStock_exact_full_converts', () => {
+  const r = addEnergyToStock(0.8, 0, 0.2, 1, 5);
+  assert.equal(r.stock, 1);
+  assert.equal(r.energy, 0);
+});
+
+test('addEnergyToStock_caps_at_maxStock_and_keeps_gauge_full', () => {
+  // 上限ストック時はゲージを満タンで頭打ち（これ以上ストックしない）
+  const r = addEnergyToStock(0.95, 5, 0.2, 1, 5);
+  assert.equal(r.stock, 5);
+  assert.equal(r.energy, 1);
+});
+
+test('addEnergyToStock_bad_input_is_safe', () => {
+  const r = addEnergyToStock(NaN, NaN, NaN, 1, 5);
+  assert.equal(r.stock, 0);
+  assert.equal(r.energy, 0);
 });

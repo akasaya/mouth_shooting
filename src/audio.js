@@ -4,34 +4,53 @@
 //
 // すべてブラウザ前提。AudioContext は createAudio() で生成し、初回ユーザー操作で resume する。
 
-const STEP_SEC = 0.105;     // 16分音符の長さ（≒143BPM の疾走感）
+const STEP_SEC = 0.079;     // 16分音符の長さ（≒190BPM の疾走感）
 const A = 440;              // 基準音 A4
 const hz = (semiFromA, oct = 0) => A * Math.pow(2, oct + semiFromA / 12);
 
-// A マイナーのコード進行（i–VI–III–VII = Am–F–C–G）。各小節の和音をルートからの半音で。
-const CHORDS = [
-  [0, 3, 7],    // Am: A C E
-  [8, 12, 15],  // F : F A C
-  [3, 7, 10],   // C : C E G
-  [10, 14, 17], // G : G B D
+// --- 長尺ループ（約300秒）---
+// セクション制: 複数のコード進行と移調を bar から決定的に算出し、LOOP_STEPS で正確にループする。
+const BARS_PER_SECTION = 16;                       // 1セクション = 16小節
+const LOOP_BARS = 240;                             // 240小節 × 16分16個 × 0.079s ≈ 303秒
+const LOOP_STEPS = LOOP_BARS * 16;
+
+// 各4小節のコード進行（A からの半音、和音はルート+構成音）。セクションごとに切り替える。
+const PROGS = [
+  [[0, 3, 7], [8, 12, 15], [3, 7, 10], [10, 14, 17]],  // Am F C G
+  [[0, 3, 7], [5, 8, 12], [10, 14, 17], [8, 12, 15]],  // Am Dm G F
+  [[3, 7, 10], [10, 14, 17], [5, 8, 12], [0, 3, 7]],   // C G Dm Am
+  [[8, 12, 15], [3, 7, 10], [10, 14, 17], [0, 3, 7]],  // F C G Am
 ];
-// 各小節のベース根音（A からの半音）。
-const BASS_ROOT = [0, 8, 3, 10];
+// セクションごとの移調（半音）。長く聴いても飽きないよう転調で起伏を作る。
+const SECTION_TRANSPOSE = [0, 0, 5, -2, 3, -2, 7, 0];
+
 // 16分のベース駆動パターン（コード根音に対する相対半音 / null=休符）。
 const BASS = [0, null, 0, null, 7, null, 0, 12, 0, null, 0, null, 7, null, 0, 5];
 // 8分のリード旋律（A からの半音 / null=休符）。4小節 = 32 個。
 const LEAD = [
-  12, null, 7, 12, 14, 12, 7, 3,      // Am
-  8, null, 12, 8, 5, 8, 12, null,     // F
-  15, 14, 12, 10, 7, 10, 12, null,    // C
-  14, 10, 7, 10, 14, 17, 19, null,    // G
+  12, null, 7, 12, 14, 12, 7, 3,      // 1小節目
+  8, null, 12, 8, 5, 8, 12, null,     // 2小節目
+  15, 14, 12, 10, 7, 10, 12, null,    // 3小節目
+  14, 10, 7, 10, 14, 17, 19, null,    // 4小節目
 ];
+
+// ループ内ステップから、その小節のコード進行・移調・小節内位置を解決する（純粋）。
+function resolveBar(s) {
+  const ls = ((s % LOOP_STEPS) + LOOP_STEPS) % LOOP_STEPS;
+  const bar = Math.floor(ls / 16);
+  const sec = Math.floor(bar / BARS_PER_SECTION);
+  const prog = PROGS[sec % PROGS.length];
+  const transpose = SECTION_TRANSPOSE[sec % SECTION_TRANSPOSE.length];
+  const barInProg = bar % prog.length;
+  return { ls, bar, sec, transpose, chord: prog[barInProg], barInProg, i16: ls % 16 };
+}
 
 export function createAudio() {
   let ctx = null;
   let master = null;
   let musicGain = null;
-  let level = 0;
+  let level = 0;       // コンボ由来のレイヤー段階(0..4)
+  let intensity = 0;   // 生存時間由来の追加レイヤー段階(0..4)
   let schedulerId = null;
   let step = 0;
   let nextStepTime = 0;
@@ -145,18 +164,30 @@ export function createAudio() {
     fmVoice(ctx.currentTime, 90 + charge * 90, 0.5, { ratio: 1.5, index: 6, type: 'sine', gain: 0.32, dest: master });
     noiseBurst(ctx.currentTime, 0.5, 0.22, 200, master);
   };
+  // エクステンド（1UP）。明るい上昇アルペジオ。
+  const sfxExtend = () => {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [0, 4, 7, 12, 16].forEach((semi, i) => {
+      fmVoice(t + i * 0.06, hz(semi, 1), 0.22, { ratio: 2, index: 3, type: 'sine', gain: 0.16, dest: master });
+    });
+  };
 
   // --- 動的音楽: 16分のステップシーケンサ（各ステップを時刻 time に正確配置）---
+  // 音数は 2 軸で増える: level=コンボ段階(0..4)、intensity=生存時間段階(0..4)。
   function scheduleStep(time, s) {
-    const bar = Math.floor(s / 16) % 4;
-    const i16 = s % 16;          // 小節内の16分位置
-    const chord = CHORDS[bar];
-    const root = BASS_ROOT[bar];
+    const { ls, transpose, chord, barInProg, i16 } = resolveBar(s);
+    const tr = transpose;
+    const root = chord[0];
 
     // L0: ベース（駆動）+ キック。
     const bassRel = BASS[i16];
     if (bassRel !== null) {
-      fmVoice(time, hz(root + bassRel, -2), STEP_SEC * 1.3, { ratio: 2, index: 3, type: 'sine', gain: 0.3 });
+      fmVoice(time, hz(root + bassRel + tr, -2), STEP_SEC * 1.3, { ratio: 2, index: 3, type: 'sine', gain: 0.3 });
+      // intensity3: ベースのオクターブ上を薄く重ね、低音に厚みを出す。
+      if (intensity >= 3) {
+        fmVoice(time, hz(root + bassRel + tr, -1), STEP_SEC * 1.0, { ratio: 2, index: 2, type: 'triangle', gain: 0.05 });
+      }
     }
     if (i16 % 4 === 0) kick(time);
 
@@ -168,22 +199,40 @@ export function createAudio() {
 
     // L2: アルペジオ（16分・コードトーンを2オクターブで駆け上がる、FM プラック）。
     if (level >= 2) {
-      const tone = chord[s % chord.length] + (Math.floor(s / chord.length) % 2) * 12;
+      const idx = ls % chord.length;
+      const tone = chord[idx] + tr + (Math.floor(ls / chord.length) % 2) * 12;
       fmVoice(time, hz(tone, 0), STEP_SEC * 0.9, { ratio: 3, index: 4, type: 'sine', gain: 0.07 });
     }
 
     // L3: リード（8分・SCC/ブラス風 FM）。
     if (level >= 3 && i16 % 2 === 0) {
-      const note = LEAD[(s / 2) % LEAD.length | 0];
+      const note = LEAD[(barInProg * 8 + i16 / 2) % LEAD.length | 0];
       if (note !== null) {
-        fmVoice(time, hz(note, 0), STEP_SEC * 1.8, { ratio: 1, index: level >= 4 ? 5 : 3, type: 'sawtooth', gain: 0.09 });
+        fmVoice(time, hz(note + tr, 0), STEP_SEC * 1.8, { ratio: 1, index: level >= 4 ? 5 : 3, type: 'sawtooth', gain: 0.09 });
       }
     }
 
     // L4: カウンター（リードのオクターブ下を拍頭で重ねる）。
     if (level >= 4 && i16 % 4 === 0) {
-      const note = LEAD[(s / 2) % LEAD.length | 0];
-      if (note !== null) fmVoice(time, hz(note - 12, 0), STEP_SEC * 2.4, { ratio: 2, index: 2, type: 'triangle', gain: 0.06 });
+      const note = LEAD[(barInProg * 8 + i16 / 2) % LEAD.length | 0];
+      if (note !== null) fmVoice(time, hz(note - 12 + tr, 0), STEP_SEC * 2.4, { ratio: 2, index: 2, type: 'triangle', gain: 0.06 });
+    }
+
+    // === 生存時間による追加レイヤー（コンボとは独立に音数を増やす）===
+    // I1: 16分シェイカー（常時の細かいノリ）。
+    if (intensity >= 1 && i16 % 2 === 0) {
+      noiseBurst(time, 0.025, 0.03, 9000);
+    }
+    // I2: パッド（小節頭にコードを長く伸ばし、空間を埋める）。
+    if (intensity >= 2 && i16 === 0) {
+      for (const n of chord) {
+        fmVoice(time, hz(n + tr, -1), STEP_SEC * 16 * 0.95, { ratio: 1, index: 1.2, type: 'sine', attack: 0.04, gain: 0.035 });
+      }
+    }
+    // I4: ハイ・カウンター旋律（リードの長3度上を重ね、華やかさを足す）。
+    if (intensity >= 4 && i16 % 2 === 0) {
+      const note = LEAD[(barInProg * 8 + i16 / 2) % LEAD.length | 0];
+      if (note !== null) fmVoice(time, hz(note + 4 + tr, 1), STEP_SEC * 1.4, { ratio: 2, index: 3, type: 'sine', gain: 0.045 });
     }
   }
 
@@ -215,15 +264,21 @@ export function createAudio() {
     level = Math.max(0, Math.min(4, l | 0));
   }
 
+  function setMusicIntensity(n) {
+    intensity = Math.max(0, Math.min(4, n | 0));
+  }
+
   return {
     resume,
     startMusic,
     stopMusic,
     setMusicLevel,
+    setMusicIntensity,
     sfxShot,
     sfxEnemyShot,
     sfxHit,
     sfxExplosion,
     sfxBomb,
+    sfxExtend,
   };
 }
