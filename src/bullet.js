@@ -1,11 +1,17 @@
 // 自機弾・敵弾の更新と当たり判定、描画。
 import { CONFIG } from './config.js';
-import { circlesOverlap, isOutside } from './collision.js';
+import { circlesOverlap, isOutside, withinGraze } from './collision.js';
 import { comboScoreMultiplier } from './combo.js';
 import { addEnergyToStock } from './bomb.js';
+import { maybeDropItem } from './item.js';
 import { spawnBurst } from './particles.js';
 import { fillDot as dot } from './draw.js';
 import { hitPlayer } from './enemy.js';
+
+// コンボ→スコア倍率（急カーブ設定込み）。
+function scoreMult(game) {
+  return comboScoreMultiplier(game.combo.count, CONFIG.combo.scorePer, CONFIG.combo.scoreAccel, CONFIG.combo.scoreMultMax);
+}
 
 export function updateBullets(game, dtSec) {
   const w = game.width;
@@ -48,6 +54,17 @@ export function updateBullets(game, dtSec) {
     if (circlesOverlap(b.x, b.y, b.r, p.x, p.y, CONFIG.player.radius)) {
       b.alive = false;
       hitPlayer(game);
+      continue;
+    }
+    // かすり: 当たり判定の外側まで近づくと、その弾1回だけスコア＋ボムゲージが増える。
+    if (!b.grazed && withinGraze(p.x, p.y, CONFIG.player.radius, b.x, b.y, b.r, CONFIG.graze.margin)) {
+      b.grazed = true;
+      game.score += CONFIG.graze.score;
+      const r = addEnergyToStock(game.bomb.energy, game.bomb.stock, CONFIG.graze.energy, CONFIG.bomb.energyMax, CONFIG.bomb.maxStock);
+      game.bomb.energy = r.energy;
+      game.bomb.stock = r.stock;
+      spawnBurst(game.particles, b.x, b.y, 2, '#aef9ff');
+      game.audio.sfxGraze();
     }
   }
 
@@ -57,15 +74,15 @@ export function updateBullets(game, dtSec) {
 
 function onShotKill(game, e) {
   const cfg = CONFIG.bomb;
-  const mult = comboScoreMultiplier(game.combo.count, CONFIG.combo.scorePer);
-  game.score += CONFIG.shot.score * mult;
   game.combo.count += 1;
   game.combo.lastKillTime = game.time;
+  game.score += CONFIG.shot.score * scoreMult(game);
   // ショット撃破でボムゲージが溜まる。満タンで +1 ストック・ゲージ0（コンボが高いほど回復ボーナス）。
   const refill = cfg.energyPerKill + Math.min(cfg.energyPerKill, cfg.energyComboBonus * game.combo.count);
   const r = addEnergyToStock(game.bomb.energy, game.bomb.stock, refill, cfg.energyMax, cfg.maxStock);
   game.bomb.energy = r.energy;
   game.bomb.stock = r.stock;
+  maybeDropItem(game, e); // 硬い敵・ボスならバフをドロップ
   spawnBurst(game.particles, e.x, e.y, 10, e.color);
   game.audio.sfxExplosion();
 }

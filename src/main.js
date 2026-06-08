@@ -2,7 +2,8 @@
 import { CONFIG } from './config.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
-import { createPlayer, updatePlayer, updateShooting } from './player.js';
+import { createPlayer, updatePlayer, updateShooting, optionPositions } from './player.js';
+import { updateItems, drawItems } from './item.js';
 import { createBomb, updateBomb, chargeToRadius } from './bomb.js';
 import { updateBullets, drawBullets } from './bullet.js';
 import { updateEnemies, drawEnemies } from './enemy.js';
@@ -29,6 +30,7 @@ const game = {
   enemyBullets: [],
   enemies: [],
   particles: [],
+  items: [],
   combo: { count: 0, lastKillTime: 0 },
   banner: null,
   clearAt: 0,
@@ -73,6 +75,7 @@ function startGame() {
   game.enemyBullets.length = 0;
   game.enemies.length = 0;
   game.particles.length = 0;
+  game.items.length = 0;
   game.combo.count = 0;
   game.combo.lastKillTime = game.time;
   game.banner = null;
@@ -113,6 +116,7 @@ function update(dtSec) {
   updateBomb(game, dtSec);
   updateEnemies(game, dtSec);
   updateBullets(game, dtSec);
+  updateItems(game, dtSec);
   updateDirector(game, dtSec);
   updateParticles(game.particles, dtSec);
 
@@ -145,6 +149,7 @@ function render() {
   ctx.fillRect(0, 0, game.width, game.height);
 
   drawParticles(ctx, game.particles);
+  drawItems(ctx, game);
   drawBullets(ctx, game);
   drawEnemies(ctx, game);
   drawBomb();
@@ -164,7 +169,16 @@ function drawPlayer() {
   // 無敵中は点滅。
   const blink = game.time < p.invulnUntil && Math.floor(game.time / 80) % 2 === 0;
   if (blink) return;
+
+  // 僚機（オプション）。
+  for (const o of optionPositions(game)) {
+    neonTriangle(ctx, o.x, o.y, CONFIG.player.radius * 0.5, p.angle, '#ffd166', 12);
+  }
   neonTriangle(ctx, p.x, p.y, CONFIG.player.radius, p.angle, '#39f6ff', 18);
+  // シールドの輪。
+  if (p.shield) {
+    neonRing(ctx, p.x, p.y, CONFIG.player.radius + 8, 2.5, '#5cffb1', 0.6 + 0.2 * Math.sin(game.time / 120));
+  }
 }
 
 function drawBomb() {

@@ -23,6 +23,20 @@ test('comboScoreMultiplier_negative_or_nan_falls_back_to_one', () => {
   assert.equal(comboScoreMultiplier(NaN, 10), 1);
 });
 
+test('comboScoreMultiplier_accel_makes_curve_steeper', () => {
+  // accel=0.5: 1 + steps + floor(steps^2 * accel)
+  assert.equal(comboScoreMultiplier(10, 10, 0.5), 2);   // steps1: 1+1+0
+  assert.equal(comboScoreMultiplier(30, 10, 0.5), 8);   // steps3: 1+3+4
+  assert.equal(comboScoreMultiplier(50, 10, 0.5), 18);  // steps5: 1+5+12
+});
+
+test('comboScoreMultiplier_accel_is_monotonic_and_capped', () => {
+  const a = comboScoreMultiplier(40, 10, 0.5);
+  const b = comboScoreMultiplier(60, 10, 0.5);
+  assert.ok(b > a);
+  assert.equal(comboScoreMultiplier(100, 10, 0.5, 20), 20); // multMax でクランプ
+});
+
 test('bombChargeRate_increases_monotonically_with_combo', () => {
   const base = 0.85, perStep = 0.14, chargePer = 5;
   const r0 = bombChargeRate(0, base, perStep, chargePer);

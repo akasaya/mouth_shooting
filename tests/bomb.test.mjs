@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextCharge, chargeToRadius, gainEnergy, drainEnergy, addEnergyToStock } from '../src/bomb.js';
+import { nextCharge, chargeToRadius, gainEnergy, drainEnergy, addEnergyToStock, bombKillEnergy } from '../src/bomb.js';
 
 test('nextCharge_accumulates_rate_times_dt', () => {
   // 0 から 速度1.0 × 0.5秒 = 0.5
@@ -71,4 +71,17 @@ test('addEnergyToStock_bad_input_is_safe', () => {
   const r = addEnergyToStock(NaN, NaN, NaN, 1, 5);
   assert.equal(r.stock, 0);
   assert.equal(r.energy, 0);
+});
+
+test('bombKillEnergy_scales_with_kill_index', () => {
+  // 同時撃破が進むほど（killIndex が大きいほど）回復が増える
+  assert.ok(Math.abs(bombKillEnergy(1, 0.012) - 0.012) < 1e-9);
+  assert.ok(Math.abs(bombKillEnergy(5, 0.012) - 0.06) < 1e-9);
+  assert.ok(bombKillEnergy(10, 0.012) > bombKillEnergy(3, 0.012));
+});
+
+test('bombKillEnergy_bad_input_returns_zero', () => {
+  assert.equal(bombKillEnergy(0, 0.012), 0);
+  assert.equal(bombKillEnergy(-2, 0.012), 0);
+  assert.equal(bombKillEnergy(NaN, 0.012), 0);
 });

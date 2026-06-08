@@ -271,6 +271,21 @@ export function createAudio() {
       fmVoice(t + i * 0.06, hz(semi, 1), 0.22, { ratio: 2, index: 3, type: 'sine', gain: 0.16, dest: master });
     });
   };
+  // かすり。短く高い「チッ」。連発するので控えめ。
+  const sfxGraze = () => sfxBlip(2400, 0.04, 'sine', 0.04, 3200);
+  // アイテム取得。きらめく2音。
+  const sfxItem = () => {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    fmVoice(t, hz(7, 1), 0.16, { ratio: 3, index: 3, type: 'sine', gain: 0.14, dest: master });
+    fmVoice(t + 0.07, hz(12, 1), 0.2, { ratio: 3, index: 3, type: 'sine', gain: 0.14, dest: master });
+  };
+  // シールド消費（被弾を肩代わり）。やわらかい下降ノイズ＋トーン。
+  const sfxShield = () => {
+    if (!ctx) return;
+    fmVoice(ctx.currentTime, 320, 0.3, { ratio: 1.5, index: 4, type: 'sine', gain: 0.2, dest: master });
+    noiseBurst(ctx.currentTime, 0.25, 0.12, 1200, master);
+  };
 
   // --- 動的音楽: 16分のステップシーケンサ（各ステップを時刻 time に正確配置）---
   // 音数は 2 軸で増える: level=コンボ段階(0..4)、intensity=生存時間段階(0..4)。
@@ -391,5 +406,8 @@ export function createAudio() {
     sfxExplosion,
     sfxBomb,
     sfxExtend,
+    sfxGraze,
+    sfxItem,
+    sfxShield,
   };
 }

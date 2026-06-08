@@ -3,9 +3,13 @@
 
 const clampNonNeg = (n) => (Number.isFinite(n) && n > 0 ? n : 0);
 
-// コンボ数 → スコア倍率（scorePer ごとに +1。最低 1 倍）。
-export function comboScoreMultiplier(combo, scorePer) {
-  return 1 + Math.floor(clampNonNeg(combo) / scorePer);
+// コンボ数 → スコア倍率。scorePer ごとに段(steps)が1上がり、
+// 倍率 = 1 + steps + floor(steps² × accel)。accel>0 で高コンボほど急カーブに伸びる。
+// accel 既定 0・multMax 既定 ∞ なので、2引数呼び出しは従来の線形（1+steps）と同じ。
+export function comboScoreMultiplier(combo, scorePer, accel = 0, multMax = Infinity) {
+  const steps = Math.floor(clampNonNeg(combo) / scorePer);
+  const mult = 1 + steps + Math.floor(steps * steps * Math.max(0, accel));
+  return Math.min(multMax, mult);
 }
 
 // コンボ数 → ボムのチャージ速度（charge/秒）。コンボが高いほど速く溜まる。
