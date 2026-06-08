@@ -29,11 +29,30 @@ export function drainEnergy(energy, amount) {
   return Math.max(0, clamp01(energy) - Math.max(0, amount));
 }
 
+// ゲージにエネルギーを加算し、満タン(max)になったら +1 ストック・ゲージを 0 にリセット（純粋）。
+// 端数は繰り越さない（ユーザー指定: 満タンで 0 に戻す）。maxStock で頭打ち時はゲージを満タン維持。
+export function addEnergyToStock(energy, stock, amount, max = 1, maxStock = Infinity) {
+  const e0 = Math.max(0, Number.isFinite(energy) ? energy : 0);
+  const add = Math.max(0, Number.isFinite(amount) ? amount : 0);
+  let s = Number.isFinite(stock) ? Math.max(0, Math.floor(stock)) : 0;
+  let e = e0 + add;
+  if (e >= max) {
+    if (s < maxStock) {
+      s += 1;
+      e = 0;          // 満タンでストック化し、ゲージは 0 に戻す
+    } else {
+      e = max;        // ストック上限ならゲージは満タンで頭打ち
+    }
+  }
+  return { energy: e, stock: Math.min(s, maxStock) };
+}
+
 export function createBomb() {
   return {
     charging: false,
     charge: 0,        // 0..1
-    energy: CONFIG.bomb.energyStart, // 0..1。ショット撃破で回復、チャージで消費
+    energy: CONFIG.bomb.energyStart, // 0..1。ショット撃破で溜まり、満タンで +1 ストック
+    stock: CONFIG.bomb.stockStart,   // 所持ボム数。発射で 1 消費（ストック0では撃てない）
     active: false,    // 衝撃波が拡大中か
     radius: 0,        // 現在の波の半径
     targetRadius: 0,  // 拡大の到達点
@@ -49,24 +68,19 @@ export function updateBomb(game, dtSec) {
   const cc = CONFIG.combo;
   const holding = game.input.right;
 
-  // --- チャージ中（エネルギーを消費し、燃料が尽きたら頭打ち）---
-  if (holding && !b.active) {
+  // --- チャージ中（ストックを所持しているときだけ溜められる。チャージ量は半径のみを決める）---
+  // ストック0で右長押ししても何も起きない（右連打の無敵を防止）。
+  if (holding && !b.active && b.stock > 0) {
     b.charging = true;
     const rate = bombChargeRate(game.combo.count, cfg.chargeRateBase, cfg.chargePerComboStep, cc.chargePer);
-    const desired = nextCharge(b.charge, rate, dtSec, cfg.maxCharge);
-    let delta = desired - b.charge;
-    if (delta > 0 && cfg.energyPerCharge > 0) {
-      const affordable = b.energy / cfg.energyPerCharge; // 残エネルギーで伸ばせるチャージ量
-      if (delta > affordable) delta = affordable;        // 燃料切れで頭打ち
-      b.charge += delta;
-      b.energy = drainEnergy(b.energy, delta * cfg.energyPerCharge);
-    }
+    b.charge = nextCharge(b.charge, rate, dtSec, cfg.maxCharge);
   }
 
-  // --- 離した瞬間に発動（最小チャージ未満は不発＝連打抑止）---
+  // --- 離した瞬間に発動（最小チャージ未満は不発＝連打抑止。発射でストックを1消費）---
   if (!holding && b.charging && !b.active) {
     b.charging = false;
-    if (b.charge >= cfg.minChargeToFire) {
+    if (b.charge >= cfg.minChargeToFire && b.stock > 0) {
+      b.stock -= 1;
       b.active = true;
       b.radius = 0;
       b.targetRadius = chargeToRadius(b.charge, cfg.minRadius, cfg.maxRadius);
@@ -75,7 +89,7 @@ export function updateBomb(game, dtSec) {
       game.audio.sfxBomb(b.charge);
       spawnBurst(game.particles, game.player.x, game.player.y, 28, '#39f6ff');
     } else {
-      b.charge = 0; // 不発。消費した僅かなエネルギーは戻らない（タップ連打は損）
+      b.charge = 0; // 不発（最小チャージ未満）。ストックは消費しない
     }
   }
 

@@ -2,7 +2,7 @@
 import { CONFIG } from './config.js';
 import { circlesOverlap, isOutside } from './collision.js';
 import { comboScoreMultiplier } from './combo.js';
-import { gainEnergy } from './bomb.js';
+import { addEnergyToStock } from './bomb.js';
 import { spawnBurst } from './particles.js';
 import { fillDot as dot } from './draw.js';
 import { hitPlayer } from './enemy.js';
@@ -61,9 +61,11 @@ function onShotKill(game, e) {
   game.score += CONFIG.shot.score * mult;
   game.combo.count += 1;
   game.combo.lastKillTime = game.time;
-  // ショット撃破がボムの燃料になる（コンボが高いほど回復ボーナス）。
+  // ショット撃破でボムゲージが溜まる。満タンで +1 ストック・ゲージ0（コンボが高いほど回復ボーナス）。
   const refill = cfg.energyPerKill + Math.min(cfg.energyPerKill, cfg.energyComboBonus * game.combo.count);
-  game.bomb.energy = gainEnergy(game.bomb.energy, refill, cfg.energyMax);
+  const r = addEnergyToStock(game.bomb.energy, game.bomb.stock, refill, cfg.energyMax, cfg.maxStock);
+  game.bomb.energy = r.energy;
+  game.bomb.stock = r.stock;
   spawnBurst(game.particles, e.x, e.y, 10, e.color);
   game.audio.sfxExplosion();
 }

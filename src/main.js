@@ -8,7 +8,8 @@ import { updateBullets, drawBullets } from './bullet.js';
 import { updateEnemies, drawEnemies } from './enemy.js';
 import { createDirector, startDirector, updateDirector } from './stage.js';
 import { updateParticles, drawParticles } from './particles.js';
-import { applyComboDecay, musicLayerLevel } from './combo.js';
+import { applyComboDecay, musicLayerLevel, survivalLayerLevel } from './combo.js';
+import { lifeExtends } from './score.js';
 import { neonTriangle, neonRing } from './draw.js';
 import { drawHud, drawOverlay } from './hud.js';
 
@@ -88,6 +89,7 @@ function endGame(state) {
   game.state = state;
   game.audio.stopMusic();
   game.audio.setMusicLevel(0);
+  game.audio.setMusicIntensity(0);
   if (game.score > game.highScore) {
     game.highScore = game.score;
     saveHighScore(game.highScore);
@@ -104,6 +106,8 @@ canvas.addEventListener('mousedown', () => {
 function update(dtSec) {
   if (game.state !== 'playing') return;
 
+  const scoreBefore = game.score;
+
   updatePlayer(game, dtSec);
   updateShooting(game);
   updateBomb(game, dtSec);
@@ -112,13 +116,26 @@ function update(dtSec) {
   updateDirector(game, dtSec);
   updateParticles(game.particles, dtSec);
 
-  // コンボ減衰と音楽レイヤー。
+  // エクステンド: スコアが extendEvery を跨ぐごとに +1 ライフ。
+  const ext = lifeExtends(scoreBefore, game.score, CONFIG.scoring.extendEvery);
+  if (ext > 0) {
+    game.player.lives += ext;
+    game.banner = { text: ext > 1 ? `EXTEND x${ext}!` : 'EXTEND!', until: game.time + 1500 };
+    game.audio.sfxExtend();
+  }
+
+  // コンボ減衰と音楽レイヤー（コンボ由来 level ＋ 生存時間由来 intensity）。
   game.combo.count = applyComboDecay(
     game.combo.count,
     game.time - game.combo.lastKillTime,
     CONFIG.combo.decayMs,
   );
   game.audio.setMusicLevel(musicLayerLevel(game.combo.count, CONFIG.combo.musicThresholds));
+  game.audio.setMusicIntensity(survivalLayerLevel(
+    game.director.elapsed,
+    CONFIG.music.survivalPerLayerSec,
+    CONFIG.music.survivalMaxLevel,
+  ));
 }
 
 // --- 描画 ---
